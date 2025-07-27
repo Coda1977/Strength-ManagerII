@@ -96,6 +96,11 @@ The Strengths Manager is a full-stack web application designed to help managers 
 - **Conversations/Messages Tables**: Stores AI coaching conversation history
 - **Conversation Backups Table**: Handles data migration and corruption recovery
 
+## Source Code Repository
+- **GitHub Repository**: https://github.com/Coda1977/Strength-ManagerII.git
+- **Repository Status**: Fully prepared for GitHub push with complete documentation
+- **Files Ready**: All source code, configuration files, documentation, and deployment guides
+
 ## Recent Changes
 - July 14, 2025: CRITICAL BUG FIX - Fixed email processing logic where database was updated before email sending, causing users to miss emails while system thought they were sent. Moved database update to occur after successful email delivery and reset incorrect database states for affected users.
 - July 14, 2025: Resolved "AI not available due to rate limit" error by user purchasing additional OpenAI API tokens - confirmed application error handling was working correctly and issue was resolved by increasing OpenAI account quota
