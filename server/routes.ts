@@ -1,7 +1,7 @@
 import { Express, Request, Response, NextFunction } from 'express';
 import { createServer, Server } from 'http';
 import multer from 'multer';
-import { isAuthenticated, setupAuth } from './replitAuth';
+import { isAuthenticated, setupAuth } from './auth0Auth';
 import { storage } from './storage';
 import { parseTeamMembersFile } from './fileParser';
 import { generateTeamInsight, generateCollaborationInsight, generateCoachResponse, generateContextAwareStarterQuestions, generateFollowUpQuestions } from './openai';
@@ -27,12 +27,12 @@ import crypto from 'crypto';
 
 interface AuthenticatedRequest extends Request {
   user: {
-    claims: {
-      sub: string;
-      email: string;
-      first_name: string;
-      last_name: string;
-    };
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    hasCompletedOnboarding: boolean;
+    isAdmin: boolean;
   };
 }
 
@@ -54,7 +54,7 @@ const authenticatedMiddleware = (req: Request, res: Response, next: NextFunction
 // Middleware to check if user has completed onboarding
 const requireOnboarding = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = (req as AuthenticatedRequest).user.claims.sub;
+    const userId = (req as AuthenticatedRequest).user.id;
     const user = await storage.getUser(userId);
 
     if (!user || !user.hasCompletedOnboarding) {
@@ -134,7 +134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -146,8 +146,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Onboarding route
   app.post('/api/onboarding', isAuthenticated, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
-      const userClaims = (req as AuthenticatedRequest).user.claims;
+      const userId = (req as AuthenticatedRequest).user.id;
+      const userClaims = (req as AuthenticatedRequest).user;
       console.log('Onboarding request:', { userId, body: req.body });
 
       // Validate the request body
@@ -165,7 +165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await emailScheduler.sendWelcomeEmail(
           userId,
           userClaims.email,
-          userClaims.first_name,
+          userClaims.firstName,
           timezone
         );
         console.log('Welcome email sent to:', userClaims.email);
@@ -186,7 +186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Team member routes - require authentication and completed onboarding
   app.get('/api/team-members', isAuthenticated, requireOnboarding, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const managerId = (req as AuthenticatedRequest).user.claims.sub;
+      const managerId = (req as AuthenticatedRequest).user.id;
       const members = await storage.getTeamMembers(managerId);
       res.json(members);
     } catch (error) {
@@ -197,7 +197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/team-members', isAuthenticated, requireOnboarding, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const managerId = (req as AuthenticatedRequest).user.claims.sub;
+      const managerId = (req as AuthenticatedRequest).user.id;
       const validatedData = insertTeamMemberSchema.parse({
         ...req.body,
         managerId
@@ -242,7 +242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/generate-team-insight', isAuthenticated, requireOnboarding, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const authReq = req as AuthenticatedRequest;
-      const userId = authReq.user.claims.sub;
+      const userId = authReq.user.id;
       const user = await storage.getUser(userId);
       const teamMembers = await storage.getTeamMembers(userId);
       if (!user || !user.topStrengths) {
@@ -281,7 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw errors.validation('Cannot generate collaboration insight for the same member');
       }
       const authReq = req as AuthenticatedRequest;
-      const userId = authReq.user.claims.sub;
+      const userId = authReq.user.id;
       const user = await storage.getUser(userId);
       const teamMembers = await storage.getTeamMembers(userId);
       let member1Strengths: string[] = [];
@@ -312,7 +312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Chat conversation management routes
   app.get('/api/conversations', isAuthenticated, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const conversations = await storage.getConversations(userId);
 
       res.json(createSuccessResponse(conversations));
@@ -326,12 +326,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
 
       const authReq = req as AuthenticatedRequest;
-      if (!authReq.user || !authReq.user.claims || !authReq.user.claims.sub) {
+      if (!authReq.user || !authReq.user.id) {
         console.error('Authentication failed - no user or claims found');
         return res.status(401).json(createErrorResponse(req, new AppError(ERROR_CODES.VALIDATION_ERROR, 'Authentication required', 401)));
       }
 
-      const userId = authReq.user.claims.sub;
+      const userId = authReq.user.id;
       console.log(`Loading conversation ${id} for user ${userId}`);
 
       const result = await storage.getConversationWithMessages(id, userId);
@@ -350,7 +350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/conversations', isAuthenticated, requireOnboarding, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const validatedData = insertConversationSchema.parse(req.body);
 
       const conversation = await storage.createConversation(userId, validatedData);
@@ -364,7 +364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/conversations/:id', isAuthenticated, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
 
       // Log the incoming data for debugging
       console.log('Update conversation request body:', JSON.stringify(req.body, null, 2));
@@ -386,7 +386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/conversations/:id', isAuthenticated, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
 
       await storage.deleteConversation(id, userId);
 
@@ -399,7 +399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/conversations/:id/archive', isAuthenticated, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
 
       await storage.archiveConversation(id, userId);
 
@@ -413,7 +413,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/conversations/:id/messages', isAuthenticated, requireOnboarding, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
 
       // Verify conversation ownership
       const conversation = await storage.getConversation(id, userId);
@@ -441,7 +441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/chat-with-coach', isAuthenticated, requireOnboarding, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const authReq = req as AuthenticatedRequest;
-      const userId = authReq.user.claims.sub;
+      const userId = authReq.user.id;
       const { message, mode, conversationHistory } = req.body;
 
       console.log('Chat request received:', { userId, mode, messageLength: message?.length });
@@ -490,7 +490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw errors.validation('No file uploaded', { field: 'file' });
       }
 
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const { buffer, mimetype, originalname } = req.file;
       const requestId = req.headers['x-request-id'] as string;
 
@@ -595,7 +595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Context-aware starter questions endpoint
   app.post('/api/context-starter-questions', isAuthenticated, requireOnboarding, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const user = await storage.getUser(userId);
       const teamMembers = await storage.getTeamMembers(userId);
       const recentTopics = req.body.recentTopics || [];
@@ -623,7 +623,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Email management routes
   app.get('/api/email-subscriptions', isAuthenticated, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const subscriptions = await storage.getEmailSubscriptions(userId);
 
       res.json(createSuccessResponse(subscriptions));
@@ -634,7 +634,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/email-subscriptions/:type', isAuthenticated, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const { type } = req.params;
       const { isActive, timezone } = req.body;
 
@@ -655,7 +655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/email-logs', isAuthenticated, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const logs = await storage.getEmailLogs(userId);
 
       res.json(createSuccessResponse(logs));
@@ -667,7 +667,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes
   app.get('/api/admin/health', isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const user = await storage.getUser(userId);
 
       if (!user || !user.isAdmin) {
@@ -724,7 +724,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/admin/users', isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const user = await storage.getUser(userId);
 
       if (!user || !user.isAdmin) {
@@ -754,7 +754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete('/api/admin/users/:userId', isAuthenticated, async (req, res) => {
     try {
-      const currentUserId = (req as AuthenticatedRequest).user.claims.sub;
+      const currentUserId = (req as AuthenticatedRequest).user.id;
       const currentUser = await storage.getUser(currentUserId);
 
       if (!currentUser || !currentUser.isAdmin) {
@@ -774,7 +774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/admin/emails', isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const user = await storage.getUser(userId);
 
       if (!user || !user.isAdmin) {
@@ -795,7 +795,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/admin/emails/test', isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const user = await storage.getUser(userId);
 
       if (!user || !user.isAdmin) {
@@ -835,7 +835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/admin/emails/send-weekly', isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const user = await storage.getUser(userId);
 
       if (!user || !user.isAdmin) {
@@ -853,7 +853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Debug route to preview weekly email content without sending
   app.post('/api/admin/emails/preview-weekly', isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const user = await storage.getUser(userId);
 
       if (!user || !user.isAdmin) {
@@ -925,7 +925,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/admin/analytics', isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const user = await storage.getUser(userId);
 
       if (!user || !user.isAdmin) {
@@ -999,7 +999,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin route: OpenAI usage summary
   app.get('/api/admin/openai-usage', isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const user = await storage.getUser(userId);
       if (!user || !user.isAdmin) {
         return res.status(403).json({ error: 'Admin access required' });
@@ -1073,7 +1073,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // API unsubscribe route (requires authentication)
   app.post('/api/unsubscribe', isAuthenticated, async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as AuthenticatedRequest).user.claims.sub;
+      const userId = (req as AuthenticatedRequest).user.id;
       const { token } = req.body;
 
       if (!token) {
