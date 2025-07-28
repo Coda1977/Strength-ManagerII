@@ -127,10 +127,14 @@ export async function setupAuth(app: Express) {
     },
     async (accessToken: string, refreshToken: string, extraParams: any, profile: Auth0User, done: any) => {
       try {
-        console.log('Auth0 authentication successful for user:', profile.id);
+        console.log('=== AUTH0 STRATEGY DEBUG ===');
+        console.log('Profile received:', profile);
+        console.log('Access token exists:', !!accessToken);
         
         // Upsert user in database
+        console.log('Attempting to upsert user...');
         const user = await upsertUser(profile);
+        console.log('User upserted successfully:', user.id);
         
         // Create session user object
         const sessionUser = {
@@ -146,9 +150,12 @@ export async function setupAuth(app: Express) {
           profile
         };
 
+        console.log('Session user created:', sessionUser.id);
         return done(null, sessionUser);
       } catch (error) {
-        console.error('Auth0 authentication error:', error);
+        console.error('=== AUTH0 STRATEGY ERROR ===');
+        console.error('Error details:', error);
+        console.error('Error stack:', error.stack);
         return done(error, null);
       }
     }
@@ -170,7 +177,10 @@ export async function setupAuth(app: Express) {
   }));
 
   app.get("/api/auth/callback", 
-    passport.authenticate('auth0', { failureRedirect: '/api/login' }),
+    passport.authenticate('auth0', { 
+      failureRedirect: '/api/login',
+      failureFlash: false 
+    }),
     async (req, res) => {
       try {
         console.log('=== AUTH CALLBACK DEBUG ===');
