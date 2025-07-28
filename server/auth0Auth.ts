@@ -173,23 +173,38 @@ export async function setupAuth(app: Express) {
     passport.authenticate('auth0', { failureRedirect: '/api/login' }),
     async (req, res) => {
       try {
+        console.log('=== AUTH CALLBACK DEBUG ===');
+        console.log('User object:', req.user);
+        
         const user = req.user as any;
         
         if (!user) {
+          console.error('No user object in callback');
           return res.redirect("/api/login");
         }
 
+        console.log('User ID:', user.id);
+        console.log('Checking user in database...');
+
         // Check if user has completed onboarding
         const dbUser = await storage.getUser(user.id);
+        console.log('Database user:', dbUser);
         
         if (dbUser && dbUser.hasCompletedOnboarding) {
+          console.log('User has completed onboarding, redirecting to dashboard');
           return res.redirect("/dashboard");
         } else {
+          console.log('User needs onboarding, redirecting to onboarding');
           return res.redirect("/onboarding");
         }
       } catch (error) {
-        console.error('Error in auth callback:', error);
-        return res.redirect("/onboarding");
+        console.error('=== CALLBACK ERROR ===');
+        console.error('Error details:', error);
+        console.error('Error stack:', error.stack);
+        return res.status(500).json({ 
+          message: 'Authentication callback failed', 
+          error: error.message 
+        });
       }
     }
   );

@@ -49,7 +49,7 @@ Add these 4 variables to Replit Secrets:
 AUTH0_DOMAIN=dev-01m20cr4mc7cg02n.us.auth0.com
 AUTH0_CLIENT_ID=v0Z91SbVJSLhV3Q0fKa4i2LogRXk2V0M
 AUTH0_CLIENT_SECRET=Jju2PiNahOnwuyxpbfzG7ndDStcmc14wV6T909aHFt7V96E78djqRtBCosX9v76M
-AUTH0_CALLBACK_URL=https://85942558-6680-4e56-bf29-60e270826306-00-1usmqpohuohuh.pike.replit.dev/api/auth/callback
+AUTH0_CALLBACK_URL=https://85942558-6680-4e56-bf29-60e270826306-00-1usmqpohuohuo.pike.replit.dev/api/auth/callback
 ```
 
 ## Alternative: Get Full Files
