@@ -33,6 +33,15 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
-    allowedHosts: true
+    host: '0.0.0.0',
+    port: 5000,
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      '0.0.0.0',
+      '.replit.dev',
+      '.replit.app',
+      '85942558-6680-4e56-bf29-60e270826306-00-1usmqpohuohuo.pike.replit.dev'
+    ]
   },
 });
