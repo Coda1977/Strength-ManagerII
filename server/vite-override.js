@@ -1,18 +1,11 @@
-// Temporary override for Replit host blocking issue
-process.env.VITE_HOST = "0.0.0.0";
-process.env.VITE_ALLOWED_HOSTS = "all";
-
-// Override the allowedHosts check in development
+// Fix for Replit host blocking issue
+// Set environment variables to allow all hosts in development
 if (process.env.NODE_ENV === 'development') {
-  const originalConsoleWarn = console.warn;
-  console.warn = function(...args) {
-    const message = args.join(' ');
-    if (message.includes('allowedHosts') || message.includes('host header')) {
-      // Suppress host blocking warnings
-      return;
-    }
-    originalConsoleWarn.apply(console, args);
-  };
+  process.env.DANGEROUSLY_DISABLE_HOST_CHECK = 'true';
+  process.env.VITE_HOST = '0.0.0.0';
+  process.env.VITE_PORT = '5000';
+  
+  console.log('🔧 Host override activated for Replit domains');
 }
 
 export {};
