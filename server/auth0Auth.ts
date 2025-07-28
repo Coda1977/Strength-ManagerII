@@ -122,7 +122,8 @@ export async function setupAuth(app: Express) {
   console.log('AUTH0_DOMAIN:', process.env.AUTH0_DOMAIN);
   console.log('AUTH0_CLIENT_ID:', process.env.AUTH0_CLIENT_ID);
   console.log('AUTH0_CLIENT_SECRET:', process.env.AUTH0_CLIENT_SECRET ? 'SET' : 'MISSING');
-  console.log('AUTH0_CALLBACK_URL:', process.env.AUTH0_CALLBACK_URL);
+  console.log('AUTH0_CALLBACK_URL:', JSON.stringify(process.env.AUTH0_CALLBACK_URL));
+  console.log('Callback URL length:', process.env.AUTH0_CALLBACK_URL?.length);
   
   const strategy = new Auth0Strategy(
     {
@@ -185,6 +186,17 @@ export async function setupAuth(app: Express) {
     console.log('Request referer:', req.get('referer'));
     console.log('Request protocol:', req.protocol);
     console.log('Full URL:', `${req.protocol}://${req.get('host')}${req.originalUrl}`);
+    
+    // Generate the Auth0 URL manually to debug
+    const authUrl = `https://${process.env.AUTH0_DOMAIN}/authorize?` +
+      `response_type=code&` +
+      `client_id=${process.env.AUTH0_CLIENT_ID}&` +
+      `redirect_uri=${encodeURIComponent(process.env.AUTH0_CALLBACK_URL!)}&` +
+      `scope=openid%20email%20profile`;
+    
+    console.log('=== AUTH0 URL DEBUG ===');
+    console.log('Generated Auth0 URL:', authUrl);
+    console.log('Callback URL (encoded):', encodeURIComponent(process.env.AUTH0_CALLBACK_URL!));
     
     passport.authenticate('auth0', {
       scope: 'openid email profile'
