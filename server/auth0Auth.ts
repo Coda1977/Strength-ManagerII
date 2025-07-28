@@ -118,6 +118,12 @@ export async function setupAuth(app: Express) {
   app.use(passport.session());
 
   // Configure Auth0 Strategy
+  console.log('=== AUTH0 CONFIGURATION DEBUG ===');
+  console.log('AUTH0_DOMAIN:', process.env.AUTH0_DOMAIN);
+  console.log('AUTH0_CLIENT_ID:', process.env.AUTH0_CLIENT_ID);
+  console.log('AUTH0_CLIENT_SECRET:', process.env.AUTH0_CLIENT_SECRET ? 'SET' : 'MISSING');
+  console.log('AUTH0_CALLBACK_URL:', process.env.AUTH0_CALLBACK_URL);
+  
   const strategy = new Auth0Strategy(
     {
       domain: process.env.AUTH0_DOMAIN!,
@@ -172,9 +178,18 @@ export async function setupAuth(app: Express) {
   });
 
   // Auth routes
-  app.get("/api/login", passport.authenticate('auth0', {
-    scope: 'openid email profile'
-  }));
+  app.get("/api/login", (req, res, next) => {
+    console.log('=== LOGIN REQUEST DEBUG ===');
+    console.log('Request host:', req.get('host'));
+    console.log('Request origin:', req.get('origin'));
+    console.log('Request referer:', req.get('referer'));
+    console.log('Request protocol:', req.protocol);
+    console.log('Full URL:', `${req.protocol}://${req.get('host')}${req.originalUrl}`);
+    
+    passport.authenticate('auth0', {
+      scope: 'openid email profile'
+    })(req, res, next);
+  });
 
   app.get("/api/auth/callback", 
     passport.authenticate('auth0', { 
