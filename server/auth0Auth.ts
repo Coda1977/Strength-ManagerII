@@ -124,13 +124,14 @@ export async function setupAuth(app: Express) {
   console.log('AUTH0_CLIENT_SECRET:', process.env.AUTH0_CLIENT_SECRET ? 'SET' : 'MISSING');
   console.log('AUTH0_CALLBACK_URL:', JSON.stringify(process.env.AUTH0_CALLBACK_URL));
   console.log('Callback URL length:', process.env.AUTH0_CALLBACK_URL?.length);
+  console.log('Trimmed callback URL:', JSON.stringify(process.env.AUTH0_CALLBACK_URL?.trim()));
   
   const strategy = new Auth0Strategy(
     {
       domain: process.env.AUTH0_DOMAIN!,
       clientID: process.env.AUTH0_CLIENT_ID!,
       clientSecret: process.env.AUTH0_CLIENT_SECRET!,
-      callbackURL: process.env.AUTH0_CALLBACK_URL!
+      callbackURL: process.env.AUTH0_CALLBACK_URL?.trim()!
     },
     async (accessToken: string, refreshToken: string, extraParams: any, profile: Auth0User, done: any) => {
       try {
