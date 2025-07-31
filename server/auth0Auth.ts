@@ -154,13 +154,28 @@ export async function setupAuth(app: Express) {
     async (accessToken: string, refreshToken: string, extraParams: any, profile: Auth0User, done: any) => {
       try {
         console.log('=== AUTH0 STRATEGY DEBUG ===');
-        console.log('Profile received:', profile);
+        console.log('Profile received:', JSON.stringify(profile, null, 2));
         console.log('Access token exists:', !!accessToken);
+        
+        // Test database connection first
+        try {
+          console.log('Testing database connection...');
+          const testQuery = await storage.getUser('test-connection-check');
+          console.log('Database connection: OK (returned:', testQuery ? 'user found' : 'no user - normal')');
+        } catch (dbError) {
+          console.error('❌ DATABASE CONNECTION FAILED:', dbError);
+          throw new Error('Database connection failed: ' + dbError.message);
+        }
         
         // Upsert user in database
         console.log('Attempting to upsert user...');
         const user = await upsertUser(profile);
         console.log('User upserted successfully:', user.id);
+        
+        // Verify the user was actually saved
+        console.log('Verifying user was saved...');
+        const verifyUser = await storage.getUser(user.id);
+        console.log('Verification result:', verifyUser ? 'USER FOUND IN DB' : '❌ USER NOT FOUND IN DB');
         
         // Create session user object
         const sessionUser = {
