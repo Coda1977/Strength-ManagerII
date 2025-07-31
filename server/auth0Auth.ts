@@ -193,14 +193,16 @@ export async function setupAuth(app: Express) {
       `response_type=code&` +
       `client_id=${process.env.AUTH0_CLIENT_ID}&` +
       `redirect_uri=${encodeURIComponent(process.env.AUTH0_CALLBACK_URL!)}&` +
-      `scope=openid%20email%20profile`;
+      `scope=openid%20email%20profile&` +
+      `screen_hint=signup`;
     
     console.log('=== AUTH0 URL DEBUG ===');
     console.log('Generated Auth0 URL:', authUrl);
     console.log('Callback URL (encoded):', encodeURIComponent(process.env.AUTH0_CALLBACK_URL!));
     
     passport.authenticate('auth0', {
-      scope: 'openid email profile'
+      scope: 'openid email profile',
+      screen_hint: 'signup'  // This makes Auth0 show signup form first
     })(req, res, next);
   });
 
