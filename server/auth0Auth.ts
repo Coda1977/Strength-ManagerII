@@ -84,15 +84,32 @@ async function upsertUser(auth0User: Auth0User) {
     profileImageUrl: auth0User.picture || (auth0User.photos && auth0User.photos[0]?.value),
   };
 
+  console.log('=== USER UPSERT DEBUG ===');
+  console.log('Auth0 User ID:', auth0User.id);
+  console.log('User email:', userData.email);
+  console.log('User name:', userData.firstName, userData.lastName);
+
   // Check if this is a new user
   const existingUser = await storage.getUser(userData.id);
   const isNewUser = !existingUser;
   
   const user = await storage.upsertUser(userData);
+  console.log('User upserted:', user.id, user.email, 'isAdmin:', user.isAdmin);
+
+  // Auto-make your email admin
+  if (userData.email === 'codanudge@gmail.com' && !user.isAdmin) {
+    console.log('Making codanudge@gmail.com admin...');
+    const adminUser = await storage.updateUserAdminStatus(user.id, true);
+    console.log('Admin status updated:', adminUser?.isAdmin);
+  }
 
   // Send authorization welcome email for new users
   if (isNewUser && userData.email && userData.firstName) {
     try {
+      console.log('=== SENDING WELCOME EMAIL ===');
+      console.log('To:', userData.email);
+      console.log('Name:', userData.firstName);
+      
       const { emailService } = await import('./emailService');
       const websiteUrl = process.env.AUTH0_CALLBACK_URL?.split('/api')[0] || 'https://your-app.replit.dev';
       
@@ -101,9 +118,10 @@ async function upsertUser(auth0User: Auth0User) {
         userData.firstName, 
         websiteUrl
       );
-      console.log(`Authorization welcome email sent to new user: ${userData.email}`);
+      console.log(`✅ Authorization welcome email sent to new user: ${userData.email}`);
     } catch (error) {
-      console.error('Failed to send authorization welcome email:', error);
+      console.error('❌ Failed to send authorization welcome email:', error);
+      console.error('Email error details:', error.message);
       // Don't fail the authentication flow if email fails
     }
   }
